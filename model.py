@@ -148,6 +148,60 @@ class Encoder(nn.Module):
         return x
 
 
+class CrossAttentionBlock(nn.Module):
+    def __init__(self, *args, **kwargs) -> None:
+        super(CrossAttentionBlock, self).__init__(*args, **kwargs)
+        self.Wq = nn.Linear(24, 24)
+        self.Wk = nn.Linear(24, 24)
+        self.Wv = nn.Linear(24, 24)
+        self.Wo = nn.Linear(24, 24)
+
+    def forward(self, x, x_en):
+        q = self.Wq(x_en)  # q是来自于掩蔽多头注意力块的
+        k, v = self.Wk(x), self.Wv(x)
+
+
+class DecoderBlock(nn.Module):
+    def __init__(self, *args, **kwargs) -> None:
+        super(DecoderBlock, self).__init__(*args, **kwargs)
+        self.multi_attention1 = AttentionBlock# 掩蔽多头注意力层，先留着一行
+        self.add_norm1 = AddNorm()  # 掩蔽多头注意力之后的加和归一化
+        self.cross_attention = CrossAttentionBlock()  # 多头注意力机制
+        self.add_norm2 = AddNorm()  # 多头注意力之后的加和归一化
+        self.posFFN = PosFFN()  # 逐位前馈网络
+        self.add_norm3 = AddNorm()  # 前馈网络之后的加和归一化
+
+    def forward(self, x: torch.Tensor, x_en):
+        """
+        正向传播
+        :param x: 来自编码器的输入
+        :param x_en: 来自掩蔽多头注意力的输入
+        :return: 输出一个解码器计算结果。
+        """
+        x1 = self.multi_attention1(x)
+        x = self.add_norm1(x, x1)
+        x1 = self.cross_attention(x, x_en)
+        norm2_output = self.add_norm2(x, x1)
+        posFFN_output = self.posFFN(norm2_output)
+        norm3_output = self.addnorm3(posFFN_output, norm2_output)
+        return norm3_output
+
+
+class Decoder(nn.Module):
+    def __init__(self, *args, **kwargs) -> None:
+        super(Decoder, self).__init__(*args, **kwargs)
+        self.ebd = EBD(*args, **kwargs)  # 嵌入层和位置编码
+        self.decoder_blks = nn.Sequential()
+        self.decoder_blks.append(DecoderBlock())  # 添加两个解码层
+        self.decoder_blks.append(DecoderBlock())
+
+    def forward(self, x, x_en):
+        x = self.ebd(x)
+        for decoderBlock in self.decoder_blks:
+            x = decoderBlock(x, x_en)
+        return x
+
+
 # 下面是测试代码
 if __name__ == '__main__':
     # aaa = torch.ones((2, 12)).long()
