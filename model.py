@@ -59,7 +59,7 @@ def transpose_o(o: torch.Tensor):
 
 class AttentionBlock(nn.Module):
     def __init__(self, *args, **kwargs) -> None:
-        super(AttentionBlock, self).__init__(*args, **kwargs)
+        super(AttentionBlock, self).__init__()
         self.Wq = nn.Linear(24, 24, bias=False)
         self.Wk = nn.Linear(24, 24, bias=False)
         self.Wv = nn.Linear(24, 24, bias=False)
@@ -80,7 +80,7 @@ class AddNorm(nn.Module):
         self.add_norm = nn.LayerNorm(24)
         self.dropout = nn.Dropout(0.1)
 
-    def forward(self, x: torch.Tensor, x1):
+    def forward(self, x: torch.Tensor, x1: torch.Tensor) -> torch.Tensor:
         """
         加和 && 归一化
         :param x: x表示原始输入（进行词嵌入和位置嵌入后的原始输入）
@@ -100,9 +100,9 @@ class PosFFN(nn.Module):
 
     def __init__(self, *args, **kwargs) -> None:
         super(PosFFN, self).__init__(*args, **kwargs)
-        self.linear1 = nn.Linear(24, 48)  # 假设输出48，这里可以修改
+        self.linear1 = nn.Linear(24, 48, bias=False)  # 假设输出48，这里可以修改
         self.relu1 = nn.ReLU()
-        self.linear2 = nn.Linear(48, 24)  # 将特征数目变回24
+        self.linear2 = nn.Linear(48, 24, bias=False)  # 将特征数目变回24
         self.relu2 = nn.ReLU()
 
     def forward(self, x: torch.Tensor):
@@ -159,19 +159,21 @@ class CrossAttentionBlock(nn.Module):
     def forward(self, x, x_en):
         q = self.Wq(x_en)  # q是来自于掩蔽多头注意力块的
         k, v = self.Wk(x), self.Wv(x)
-
+        o = attention_func(q, k, v)
+        # o = transpose_o(o)
+        return o
 
 class DecoderBlock(nn.Module):
     def __init__(self, *args, **kwargs) -> None:
         super(DecoderBlock, self).__init__(*args, **kwargs)
-        self.multi_attention1 = AttentionBlock# 掩蔽多头注意力层，先留着一行
+        self.multi_attention1 = AttentionBlock()  # 掩蔽多头注意力层，先留着一行
         self.add_norm1 = AddNorm()  # 掩蔽多头注意力之后的加和归一化
         self.cross_attention = CrossAttentionBlock()  # 多头注意力机制
         self.add_norm2 = AddNorm()  # 多头注意力之后的加和归一化
         self.posFFN = PosFFN()  # 逐位前馈网络
         self.add_norm3 = AddNorm()  # 前馈网络之后的加和归一化
 
-    def forward(self, x: torch.Tensor, x_en):
+    def forward(self, x: torch.Tensor, x_en: torch.Tensor) -> torch.Tensor:
         """
         正向传播
         :param x: 来自编码器的输入
@@ -183,7 +185,7 @@ class DecoderBlock(nn.Module):
         x1 = self.cross_attention(x, x_en)
         norm2_output = self.add_norm2(x, x1)
         posFFN_output = self.posFFN(norm2_output)
-        norm3_output = self.addnorm3(posFFN_output, norm2_output)
+        norm3_output = self.add_norm3(posFFN_output, norm2_output)
         return norm3_output
 
 
@@ -191,15 +193,29 @@ class Decoder(nn.Module):
     def __init__(self, *args, **kwargs) -> None:
         super(Decoder, self).__init__(*args, **kwargs)
         self.ebd = EBD(*args, **kwargs)  # 嵌入层和位置编码
-        self.decoder_blks = nn.Sequential()
-        self.decoder_blks.append(DecoderBlock())  # 添加两个解码层
-        self.decoder_blks.append(DecoderBlock())
+        self.decoderBlocks = nn.Sequential()
+        self.decoderBlocks.append(DecoderBlock())  # 添加两个解码层
+        self.decoderBlocks.append(DecoderBlock())
+        self.dense = nn.Linear(24, 28, bias=False)
 
-    def forward(self, x, x_en):
+    def forward(self, x: torch.Tensor, x_en: torch.Tensor):
         x = self.ebd(x)
-        for decoderBlock in self.decoder_blks:
+        for decoderBlock in self.decoderBlocks:
             x = decoderBlock(x, x_en)
+        x = self.dense(x)
         return x
+
+
+class Transformer(nn.Module):
+    def __init__(self, *args, **kwargs) -> None:
+        super(Transformer, self).__init__(*args, **kwargs)
+        self.encoder = Encoder()
+        self.decoder = Decoder()
+
+    def forward(self, x_s: torch.Tensor, x_t: torch.Tensor):
+        x_en = self.encoder(x_s)
+        x_de = self.decoder(x_t, x_en)  # 输入encoder的输出，和目标标签
+        return x_de
 
 
 # 下面是测试代码
@@ -212,8 +228,15 @@ if __name__ == '__main__':
     # aaa = attention_block(aaa)
 
     # 测试Encoder的测试案例
-    encoder = Encoder()
-    input = torch.ones((2, 12)).long()
-    output = encoder(input)
+    # encoder = Encoder()
+    # input = torch.ones((2, 12)).long()
+    # output = encoder(input)
 
+    # 测试Transformer
+    input_source = torch.ones((2, 12)).long()
+    input_target = torch.ones((2, 1)).long()
+    print(type(input_target))
+    my_model = Transformer()
+    output = my_model(input_source, input_target)
+    print(f'output.shape: {output.shape}')
     pass
