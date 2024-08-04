@@ -20,9 +20,67 @@ class EBD(nn.Module):
         return self.word_ebd(x) + self.pos_ebd(self.pos_t)  # 词嵌入和位置嵌入相加,然后返回计算结果.
 
 
+def attention_func(Q, K, V):
+    """
+    该函数用于实现注意力计算公式
+    :param Q:
+    :param K:
+    :param V:
+    :return:
+    """
+    A = Q @ K.transpose(-2, -1)  # 将K的最后两个维度进行交换/转置，然后与Q进行矩阵乘法。
+    A = A / Q.shape[-1] ** 0.5  # d_k表示的是特征数量，也就是Q或者K的最后一个维度的长度，使用0.5次幂表示根号计算。
+    A = torch.softmax(A, dim=-1)  # 在最后一个维度计算softmax
+    O = A @ V  # 计算O
+    return O
+
+
+def transpose_qkv(qkv: torch.Tensor):
+    """
+    用来拆分Q,K,V
+    :param qkv:
+    :return:
+    """
+    qkv = qkv.reshape(qkv.shape[0], qkv.shape[1], 4, 6)  # 拆分四头注意力
+    qkv = qkv.transpose(-2, -3)  # 交换维度
+    return qkv
+
+
+def transpose_o(o: torch.Tensor):
+    """
+    用来还原o的格式
+    :param o:
+    :return:
+    """
+    o = o.transpose(-2, -3)
+    o = o.reshape(o.shape[0], o.shape[1], -1)
+    return o
+
+
+class Attention_block(nn.Module):
+    def __init__(self, *args, **kwargs) -> None:
+        super(Attention_block, self).__init__(*args, **kwargs)
+        self.Wq = nn.Linear(24, 24, bias=False)
+        self.Wk = nn.Linear(24, 24, bias=False)
+        self.Wv = nn.Linear(24, 24, bias=False)
+        self.Wo = nn.Linear(24, 24, bias=False)
+
+    def forward(self, x: torch.Tensor):
+        Q, K, V = self.Wq(x), self.Wk(x), self.Wv(x)
+        Q, K, V = transpose_qkv(Q), transpose_qkv(K), transpose_qkv(V)
+        O = attention_func(Q, K, V)
+        O = transpose_o(O)
+        O = self.Wo(O)
+        return O
+
+
 # 下面是测试代码
 if __name__ == '__main__':
     aaa = torch.ones((2, 12)).long()
     ebd = EBD()
     aaa = ebd(aaa)
+
+    attention_block = Attention_block()
+    aaa = attention_block(aaa)
+
     pass
