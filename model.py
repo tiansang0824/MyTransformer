@@ -57,9 +57,9 @@ def transpose_o(o: torch.Tensor):
     return o
 
 
-class Attention_block(nn.Module):
+class AttentionBlock(nn.Module):
     def __init__(self, *args, **kwargs) -> None:
-        super(Attention_block, self).__init__(*args, **kwargs)
+        super(AttentionBlock, self).__init__(*args, **kwargs)
         self.Wq = nn.Linear(24, 24, bias=False)
         self.Wk = nn.Linear(24, 24, bias=False)
         self.Wv = nn.Linear(24, 24, bias=False)
@@ -74,13 +74,50 @@ class Attention_block(nn.Module):
         return O
 
 
+class AddNorm(nn.Module):
+    def __init__(self, *args, **kwargs) -> None:
+        super(AddNorm, self).__init__(*args, **kwargs)
+        self.add_norm = nn.LayerNorm(24)
+
+    def forward(self, x: torch.Tensor, x1):
+        """
+        加和 && 归一化
+        :param x: x表示原始输入（进行词嵌入和位置嵌入后的原始输入）
+        :param x1: 表示多头注意力的输出结果
+        :return: 加和归一化的输出
+        """
+        x = x + x1  # 加和
+        x = self.add_norm(x)  # 层归一化
+        return x
+
+
+class PosFFN(nn.Module):
+    """
+    逐位前馈网络
+    """
+
+    def __init__(self, *args, **kwargs) -> None:
+        super(PosFFN, self).__init__(*args, **kwargs)
+        self.linear1 = nn.Linear(24, 48)  # 假设输出48，这里可以修改
+        self.relu1 = nn.ReLU()
+        self.linear2 = nn.Linear(48, 24)  # 将特征数目变回24
+        self.relu2 = nn.ReLU()
+
+    def forward(self, x: torch.Tensor):
+        x = self.linear1(x)
+        x = self.relu1(x)
+        x = self.linear2(x)
+        x = self.relu2(x)
+        return x
+
+
 # 下面是测试代码
 if __name__ == '__main__':
     aaa = torch.ones((2, 12)).long()
     ebd = EBD()
     aaa = ebd(aaa)
 
-    attention_block = Attention_block()
+    attention_block = AttentionBlock()
     aaa = attention_block(aaa)
 
     pass
