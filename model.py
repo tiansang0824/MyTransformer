@@ -78,6 +78,7 @@ class AddNorm(nn.Module):
     def __init__(self, *args, **kwargs) -> None:
         super(AddNorm, self).__init__(*args, **kwargs)
         self.add_norm = nn.LayerNorm(24)
+        self.dropout = nn.Dropout(0.1)
 
     def forward(self, x: torch.Tensor, x1):
         """
@@ -88,6 +89,7 @@ class AddNorm(nn.Module):
         """
         x = x + x1  # 加和
         x = self.add_norm(x)  # 层归一化
+        x = self.dropout(x)
         return x
 
 
@@ -111,13 +113,53 @@ class PosFFN(nn.Module):
         return x
 
 
+class EncoderBlock(nn.Module):
+    def __init__(self, *args, **kwargs) -> None:
+        super(EncoderBlock, self).__init__(*args, **kwargs)
+        self.multi_attention = AttentionBlock()
+        self.add_norm1 = AddNorm()
+        self.FFN = PosFFN()
+        self.add_norm2 = AddNorm()
+
+    def forward(self, x: torch.Tensor):
+        x1 = self.multi_attention(x)  # 计算注意力
+        x = self.add_norm1(x, x1)
+        x1 = self.FFN(x)
+        x = self.add_norm2(x, x1)
+        return x
+
+
+class Encoder(nn.Module):
+    """
+    打包编码器Encoder
+    """
+
+    def __init__(self, *args, **kwargs) -> None:
+        super(Encoder, self).__init__(*args, **kwargs)
+        self.ebd = EBD(*args, **kwargs)  # 嵌入
+        self.encoder_blks = nn.Sequential()  # 创建一个容器
+        self.encoder_blks.append(EncoderBlock())  # 假设保存两个编码器
+        self.encoder_blks.append(EncoderBlock())
+
+    def forward(self, x: torch.Tensor):
+        x = self.ebd(x)  # 嵌入
+        for encoderBlock in self.encoder_blks:
+            x = encoderBlock(x)
+        return x
+
+
 # 下面是测试代码
 if __name__ == '__main__':
-    aaa = torch.ones((2, 12)).long()
-    ebd = EBD()
-    aaa = ebd(aaa)
+    # aaa = torch.ones((2, 12)).long()
+    # ebd = EBD()
+    # aaa = ebd(aaa)
+    #
+    # attention_block = AttentionBlock()
+    # aaa = attention_block(aaa)
 
-    attention_block = AttentionBlock()
-    aaa = attention_block(aaa)
+    # 测试Encoder的测试案例
+    encoder = Encoder()
+    input = torch.ones((2, 12)).long()
+    output = encoder(input)
 
     pass
