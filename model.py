@@ -5,7 +5,7 @@ from torch import nn
 class EBD(nn.Module):
     def __init__(self, *args, **kwargs) -> None:
         super(EBD, self).__init__(*args, **kwargs)
-        self.word_ebd = nn.Embedding(28, 24)  # 词嵌入词汇表长度28,向量长度24
+        self.word_ebd = nn.Embedding(29, 24)  # 词嵌入词汇表长度28,向量长度24
         self.pos_ebd = nn.Embedding(12, 24)  # 最大的位置长度是12
         self.pos_t = torch.arange(0, 12).reshape(1, 12)  # 生成0-12的位置编码
 
