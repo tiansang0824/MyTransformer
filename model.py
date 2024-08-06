@@ -20,7 +20,7 @@ class EBD(nn.Module):
         return self.word_ebd(x) + self.pos_ebd(self.pos_t)  # 词嵌入和位置嵌入相加,然后返回计算结果.
 
 
-def attention_func(Q, K, V):
+def attention_func(Q, K, V, i_m):
     """
     该函数用于实现注意力计算公式
     :param Q:
@@ -65,10 +65,10 @@ class AttentionBlock(nn.Module):
         self.Wv = nn.Linear(24, 24, bias=False)
         self.Wo = nn.Linear(24, 24, bias=False)
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: torch.Tensor, i_m):
         Q, K, V = self.Wq(x), self.Wk(x), self.Wv(x)
         Q, K, V = transpose_qkv(Q), transpose_qkv(K), transpose_qkv(V)
-        O = attention_func(Q, K, V)
+        O = attention_func(Q, K, V, i_m)
         O = transpose_o(O)
         O = self.Wo(O)
         return O
@@ -121,8 +121,8 @@ class EncoderBlock(nn.Module):
         self.FFN = PosFFN()
         self.add_norm2 = AddNorm()
 
-    def forward(self, x: torch.Tensor):
-        x1 = self.multi_attention(x)  # 计算注意力
+    def forward(self, x: torch.Tensor, i_m):
+        x1 = self.multi_attention(x, i_m)  # 计算注意力
         x = self.add_norm1(x, x1)
         x1 = self.FFN(x)
         x = self.add_norm2(x, x1)
@@ -141,10 +141,16 @@ class Encoder(nn.Module):
         self.encoder_blks.append(EncoderBlock())  # 假设保存两个编码器
         self.encoder_blks.append(EncoderBlock())
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: torch.Tensor, i_m):
+        """
+
+        :param x:
+        :param i_m: 输入掩码
+        :return:
+        """
         x = self.ebd(x)  # 嵌入
         for encoderBlock in self.encoder_blks:
-            x = encoderBlock(x)
+            x = encoderBlock(x, i_m)
         return x
 
 
@@ -212,9 +218,17 @@ class Transformer(nn.Module):
         self.encoder = Encoder()
         self.decoder = Decoder()
 
-    def forward(self, x_s: torch.Tensor, x_t: torch.Tensor):
-        x_en = self.encoder(x_s)
-        x_de = self.decoder(x_t, x_en)  # 输入encoder的输出，和目标标签
+    def forward(self, x_s: torch.Tensor, i_m, x_t: torch.Tensor, o_m):
+        """
+        Transformer模型向前传播
+        :param x_s: 输入到编码器的源字符串
+        :param i_m: 输入的掩码
+        :param x_t: 输入到解码器的目标字符串
+        :param o_m: 输出的掩码
+        :return:
+        """
+        x_en = self.encoder(x_s, i_m)
+        x_de = self.decoder(x_t, o_m, x_en, i_m)  # 输入encoder的输出，和目标标签
         return x_de
 
 
